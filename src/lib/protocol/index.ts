@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { useConnection } from "wagmi";
+import { useAccount as useWagmiAccount } from "wagmi";
 import { MockProtocol } from "./mock";
 import type { Address, ProtocolState } from "./types";
 
@@ -34,7 +34,7 @@ export function useHydrated() {
  * the client's first render matches the server HTML.
  */
 export function useAccount(): { address?: Address; isConnected: boolean } {
-  const { address, isConnected } = useConnection();
+  const { address, isConnected } = useWagmiAccount();
   const hydrated = useHydrated();
   if (!hydrated) return { address: undefined, isConnected: false };
   return { address: address as Address | undefined, isConnected };

@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useConnect, useConnectors } from "wagmi";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { protocol, useAccount, useBalance, usePositions } from "@/lib/protocol";
 import { priceOf } from "@/lib/lmsr";
 import { cents, pct, usd } from "@/lib/format";
 import type { MarketEvent, Side } from "@/lib/types";
-import { rememberDemo } from "@/lib/wagmi";
 
 const QUICK_AMOUNTS = [1, 10, 50, 100];
 
@@ -24,8 +23,7 @@ export function TradePanel({
   const { address, isConnected } = useAccount();
   const balance = useBalance(address);
   const positions = usePositions(address);
-  const connectors = useConnectors();
-  const { mutate: connect } = useConnect();
+  const { openConnectModal } = useConnectModal();
 
   const [mode, setMode] = useState<"buy" | "sell">("buy");
   const [input, setInput] = useState("");
@@ -199,13 +197,7 @@ export function TradePanel({
       <div className="mt-5">
         {!isConnected ? (
           <button
-            onClick={() => {
-              const hasExtension = "ethereum" in window;
-              const c =
-                connectors.find((c) => (hasExtension ? c.type === "injected" : c.type === "mock")) ??
-                connectors[0];
-              connect({ connector: c }, { onSuccess: () => rememberDemo(c.type === "mock") });
-            }}
+            onClick={() => openConnectModal?.()}
             className="w-full rounded-lg bg-brand py-3 text-sm font-semibold text-white hover:bg-brand-dark"
           >
             Connect wallet to trade

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useState } from "react";
 import { CourseTile } from "@/components/MarketCard";
 import {
@@ -19,12 +20,19 @@ export default function PortfolioPage() {
   const balance = useBalance(address);
   const positions = usePositions(address);
   const [minting, setMinting] = useState(false);
+  const { openConnectModal } = useConnectModal();
 
   if (!isConnected || !address) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-24 text-center">
         <h1 className="text-2xl font-bold">Your portfolio</h1>
         <p className="mt-2 text-muted">Connect a wallet to see your positions and trade history.</p>
+        <button
+          onClick={() => openConnectModal?.()}
+          className="mt-6 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-dark"
+        >
+          Connect wallet
+        </button>
       </div>
     );
   }

@@ -1,0 +1,1 @@
+ DONT WRITE ANY SOLIDITY CONTRACTS ONly guide if needed

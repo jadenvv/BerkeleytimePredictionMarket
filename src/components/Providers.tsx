@@ -1,32 +1,54 @@
 "use client";
 
+import "@rainbow-me/rainbowkit/styles.css";
+import { lightTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useState, type ReactNode } from "react";
-import { useConnect, useConnection, useConnectors, WagmiProvider } from "wagmi";
-import { demoWasConnected, wagmiConfig } from "@/lib/wagmi";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useAccount, useAccountEffect, useConnect, useConnectors, WagmiProvider } from "wagmi";
+import { demoWasConnected, rememberDemo, wagmiConfig } from "@/lib/wagmi";
 
-/** Restores a demo-wallet session after hydration (the mock connector can't persist itself). */
-function DemoReconnect() {
-  const { status } = useConnection();
+/**
+ * The mock connector behind "Demo wallet" can't persist its session, so
+ * remember it ourselves and restore it once after the page loads.
+ */
+function DemoSession() {
+  const { status } = useAccount();
   const connectors = useConnectors();
-  const { mutate: connect } = useConnect();
+  const { connect } = useConnect();
+  const tried = useRef(false);
+
+  useAccountEffect({
+    onConnect: ({ connector }) => rememberDemo(connector.type === "mock"),
+    onDisconnect: () => rememberDemo(false),
+  });
+
   useEffect(() => {
-    if (status !== "disconnected" || !demoWasConnected()) return;
+    if (tried.current || status !== "disconnected") return;
+    tried.current = true;
+    if (!demoWasConnected()) return;
     const demo = connectors.find((c) => c.type === "mock");
     if (demo) connect({ connector: demo });
-    // only on first settle after mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status === "disconnected"]);
+  }, [status, connectors, connect]);
+
   return null;
 }
+
+const theme = lightTheme({
+  accentColor: "#00b171",
+  accentColorForeground: "white",
+  borderRadius: "large",
+  fontStack: "system",
+});
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <DemoReconnect />
-        {children}
+        <RainbowKitProvider theme={theme} modalSize="compact" appInfo={{ appName: "Berkeleytime Markets" }}>
+          <DemoSession />
+          {children}
+        </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { protocol, useAccount, useBalance } from "@/lib/protocol";
@@ -20,6 +21,7 @@ export default function CreatePage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const balance = useBalance(address);
+  const { openConnectModal } = useConnectModal();
 
   const [title, setTitle] = useState("");
   const [course, setCourse] = useState("");
@@ -215,7 +217,9 @@ export default function CreatePage() {
         {error && <p className="text-sm text-down">{error}</p>}
 
         <button
-          disabled={!isConnected || pending}
+          type={isConnected ? "submit" : "button"}
+          onClick={isConnected ? undefined : () => openConnectModal?.()}
+          disabled={pending}
           className="w-full rounded-lg bg-brand py-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {!isConnected ? "Connect wallet to create" : pending ? "Creating…" : "Create market"}

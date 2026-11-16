@@ -1,18 +1,76 @@
 "use client";
 
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { formatEther } from "ethers";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { useConnect, useConnectors, useDisconnect } from "wagmi";
+import { useDisconnect } from "wagmi";
+import { useEthersProvider } from "@/lib/ethers";
 import { useAccount, useBalance } from "@/lib/protocol";
 import { shortAddress, usd } from "@/lib/format";
-import { rememberDemo } from "@/lib/wagmi";
+
+/** Native gas-token balance on the active chain, read through ethers.js. */
+function useGasBalance(address?: string) {
+  const provider = useEthersProvider();
+  const [balance, setBalance] = useState<string | null>(null);
+  useEffect(() => {
+    if (!provider || !address) return;
+    let cancelled = false;
+    provider
+      .getBalance(address)
+      .then((wei) => !cancelled && setBalance(Number(formatEther(wei)).toFixed(4)))
+      .catch(() => !cancelled && setBalance(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [provider, address]);
+  return address ? balance : null;
+}
 
 export function WalletButton() {
-  const { address, isConnected } = useAccount();
-  const balance = useBalance(address);
-  const connectors = useConnectors();
-  const { mutate: connect, isPending, error } = useConnect();
-  const { mutate: disconnect } = useDisconnect();
+  return (
+    <ConnectButton.Custom>
+      {({ account, chain, mounted, openConnectModal, openChainModal, openAccountModal }) => {
+        if (!mounted || !account || !chain) {
+          return (
+            <button
+              onClick={openConnectModal}
+              aria-hidden={!mounted}
+              className={`rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark ${
+                mounted ? "" : "pointer-events-none opacity-0"
+              }`}
+            >
+              Connect wallet
+            </button>
+          );
+        }
+        if (chain.unsupported) {
+          return (
+            <button
+              onClick={openChainModal}
+              className="rounded-full bg-down px-4 py-2 text-sm font-semibold text-white"
+            >
+              Wrong network
+            </button>
+          );
+        }
+        return <Connected chainName={chain.name ?? "Base Sepolia"} openAccountModal={openAccountModal} />;
+      }}
+    </ConnectButton.Custom>
+  );
+}
+
+function Connected({
+  chainName,
+  openAccountModal,
+}: {
+  chainName: string;
+  openAccountModal: () => void;
+}) {
+  const { address } = useAccount();
+  const cash = useBalance(address);
+  const gas = useGasBalance(address);
+  const { disconnect } = useDisconnect();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -25,84 +83,58 @@ export function WalletButton() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  if (isConnected && address) {
-    return (
-      <div ref={ref} className="relative flex items-center gap-3">
-        <Link href="/portfolio" className="hidden sm:block text-right leading-tight">
-          <div className="text-[11px] text-muted">Cash</div>
-          <div className="text-sm font-semibold tabular">{usd(balance)}</div>
-        </Link>
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm font-medium hover:bg-subtle"
-        >
-          <span
-            className="h-5 w-5 rounded-full"
-            style={{ background: `linear-gradient(135deg, #${address.slice(2, 8)}, #${address.slice(-6)})` }}
-          />
-          {shortAddress(address)}
-        </button>
-        {open && (
-          <div className="absolute right-0 top-11 w-48 rounded-xl border border-line bg-white p-1 shadow-lg">
-            <Link
-              href="/portfolio"
-              onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-2 text-sm hover:bg-subtle"
-            >
-              Portfolio
-            </Link>
-            <button
-              onClick={() => {
-                disconnect();
-                rememberDemo(false);
-                setOpen(false);
-              }}
-              className="block w-full rounded-lg px-3 py-2 text-left text-sm text-down hover:bg-subtle"
-            >
-              Disconnect
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
+  if (!address) return null;
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative flex items-center gap-3">
+      <Link href="/portfolio" className="hidden sm:block text-right leading-tight">
+        <div className="text-[11px] text-muted">Cash</div>
+        <div className="text-sm font-semibold tabular">{usd(cash)}</div>
+      </Link>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+        className="flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-sm font-medium hover:bg-subtle"
       >
-        {isPending ? "Connecting…" : "Connect wallet"}
+        <span
+          className="h-5 w-5 rounded-full"
+          style={{ background: `linear-gradient(135deg, #${address.slice(2, 8)}, #${address.slice(-6)})` }}
+        />
+        {shortAddress(address)}
       </button>
       {open && (
-        <div className="absolute right-0 top-12 w-64 rounded-xl border border-line bg-white p-2 shadow-lg">
-          <div className="px-2 pb-2 pt-1 text-xs font-medium text-muted">Choose a wallet</div>
-          {connectors.map((c) => (
-            <button
-              key={c.uid}
-              onClick={() => {
-                connect(
-                  { connector: c },
-                  {
-                    onSuccess: () => {
-                      rememberDemo(c.type === "mock");
-                      setOpen(false);
-                    },
-                  },
-                );
-              }}
-              className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm hover:bg-subtle"
-            >
-              <span className="font-medium">
-                {c.type === "mock" ? "Demo wallet" : c.name === "Injected" ? "Browser wallet" : c.name}
-              </span>
-              <span className="text-xs text-muted">
-                {c.type === "mock" ? "no extension" : "MetaMask, Rabby…"}
-              </span>
-            </button>
-          ))}
-          {error && <p className="px-3 pt-1 text-xs text-down">{error.message.split("\n")[0]}</p>}
+        <div className="absolute right-0 top-11 w-60 rounded-xl border border-line bg-white p-1 shadow-lg">
+          <div className="px-3 py-2 text-xs text-muted">
+            <div>{chainName}</div>
+            <div className="mt-0.5 tabular text-foreground">
+              Gas: {gas === null ? "—" : `${gas} ETH`}
+            </div>
+          </div>
+          <div className="my-1 h-px bg-line" />
+          <Link
+            href="/portfolio"
+            onClick={() => setOpen(false)}
+            className="block rounded-lg px-3 py-2 text-sm hover:bg-subtle"
+          >
+            Portfolio
+          </Link>
+          <button
+            onClick={() => {
+              openAccountModal();
+              setOpen(false);
+            }}
+            className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-subtle"
+          >
+            Wallet details
+          </button>
+          <button
+            onClick={() => {
+              disconnect();
+              setOpen(false);
+            }}
+            className="block w-full rounded-lg px-3 py-2 text-left text-sm text-down hover:bg-subtle"
+          >
+            Disconnect
+          </button>
         </div>
       )}
     </div>
