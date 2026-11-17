@@ -55,7 +55,7 @@ contract Market is ReentrancyGuard {
         --quantity; // Round in the pool's favor, including fixed-point approximation.
         uint256 y = qYes + (yes ? quantity : 0);
         uint256 n = qNo + (yes ? 0 : quantity);
-        require(y <= 1e15 && n <= 1e15, "Inventory limit");
+        require(y <= 1_000e6 && n <= 1_000e6, "Inventory limit");
         require(LMSRMath.cost(y * SCALE, n * SCALE, B) - LMSRMath.cost(qYes * SCALE, qNo * SCALE, B) <= amount * SCALE, "Rounding");
     }
     // calculate proceeds for selling shares, rounding in the pool's favor
