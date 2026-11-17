@@ -8,6 +8,9 @@ import {LMSRMath} from "./LMSRMath.sol";
 
 // Ideas based on https://medium.com/gnosis-pm/radical-markets-for-elephants-a742916812db
 
+//TODO: fee needs to be considered
+//in the UI
+
 contract Market is ReentrancyGuard {
     using SafeERC20 for IERC20;
     // 
@@ -27,6 +30,7 @@ contract Market is ReentrancyGuard {
     // saves compute
     uint256 public qYes;
     uint256 public qNo;
+    uint256 public fee; // fee in basis points, 100 = 1%
     mapping(address => mapping(bool => uint256)) public shares; // Six-decimal shares.
 
     // events for trackign
@@ -34,14 +38,17 @@ contract Market is ReentrancyGuard {
     event Resolved(bool yes);
     event Redeemed(address indexed account, bool yes, uint256 quantity, uint256 amount);
 
-    constructor(IERC20 token, uint64 close, string memory question_) {
+    constructor(IERC20 token, uint64 close, string memory question_, uint256 fee_) {
         require(address(token) != address(0) && close > block.timestamp, "Invalid configuration");
         require(IERC20Metadata(address(token)).decimals() == 6, "Expected six-decimal USDC");
         require(bytes(question_).length > 0 && bytes(question_).length <= 200, "Invalid question");
+        // fee is between 0 and 10% (1000 basis points)
+        require(0 <= fee_ && fee_ <= 1000, "Invalid fee");
         collateral = token;
         creator = msg.sender;
         closesAt = close;
         question = question_;
+        fee = fee_;
     }
     function fund() external nonReentrant {
         require(msg.sender == creator && !funded && block.timestamp < closesAt, "Unavailable");
@@ -64,23 +71,31 @@ contract Market is ReentrancyGuard {
         require(quantity > 0 && quantity <= (yes ? qYes : qNo), "Invalid shares");
         return LMSRMath.proceedsForShares(yes, quantity * SCALE, qYes * SCALE, qNo * SCALE, B) / SCALE;
     }
+
+    function calculateFee(uint256 amount) public view returns (uint256) {
+        return (amount * fee + 9999) / 10000; // round up to nearest cent
+    }
+
     function buy(bool yes, uint256 amount, uint256 minShares, uint256 deadline) external nonReentrant whenOpen(deadline) {
         uint256 quantity = quoteBuy(yes, amount);
         require(quantity >= minShares, "Price moved");
         if (yes) qYes += quantity;
         else qNo += quantity;
         shares[msg.sender][yes] += quantity;
-        collateral.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 feeAmount = calculateFee(amount);
+        collateral.safeTransferFrom(msg.sender, address(this), amount + feeAmount);
         emit Traded(msg.sender, yes, true, quantity, amount);
     }
     function sell(bool yes, uint256 quantity, uint256 minAmount, uint256 deadline) external nonReentrant whenOpen(deadline) {
         require(shares[msg.sender][yes] >= quantity, "Insufficient shares");
         uint256 amount = quoteSell(yes, quantity);
-        require(amount > 0 && amount >= minAmount, "Price moved");
+        uint256 feeAmount = calculateFee(amount);
+        uint256 netAmount = amount - feeAmount;
+        require(netAmount > 0 && netAmount >= minAmount, "Price moved");
         if (yes) qYes -= quantity;
         else qNo -= quantity;
         shares[msg.sender][yes] -= quantity;
-        collateral.safeTransfer(msg.sender, amount);
+        collateral.safeTransfer(msg.sender, netAmount);
         emit Traded(msg.sender, yes, false, quantity, amount);
     }
     function resolve(bool yes) external {
@@ -101,7 +116,7 @@ contract Market is ReentrancyGuard {
     }
     // the creator can withdraw surplus
     // theoretically the creator can lose money from their funding
-    // could be fixed via a fee byt not impl herer
+    // the fee is withdrawn here as well, but the amount gained may not be +
     function withdrawSurplus() external nonReentrant {
         require(msg.sender == creator && resolved, "Unavailable");
         uint256 reserved = result ? qYes : qNo;
