@@ -12,6 +12,7 @@ contract Market is ReentrancyGuard {
     using SafeERC20 for IERC20;
     // 
     uint256 public constant B = 100e18;
+    // approx $69 
     uint256 public constant SUBSIDY = 69_314_719; // ceil(100 * ln(2) * 1e6)
     // increased precision for LMSR
     uint256 private constant SCALE = 1e12;
@@ -52,7 +53,7 @@ contract Market is ReentrancyGuard {
         require(amount >= 1e6 && amount <= 25e6, "Invalid amount");
         quantity = LMSRMath.sharesForAmount(yes, amount * SCALE, qYes * SCALE, qNo * SCALE, B) / SCALE;
         require(quantity > 1, "Trade too small");
-        --quantity; // Round in the pool's favor, including fixed-point approximation.
+        --quantity;
         uint256 y = qYes + (yes ? quantity : 0);
         uint256 n = qNo + (yes ? 0 : quantity);
         require(y <= 1_000e6 && n <= 1_000e6, "Inventory limit");
@@ -63,8 +64,7 @@ contract Market is ReentrancyGuard {
         require(quantity > 0 && quantity <= (yes ? qYes : qNo), "Invalid shares");
         return LMSRMath.proceedsForShares(yes, quantity * SCALE, qYes * SCALE, qNo * SCALE, B) / SCALE;
     }
-    function buy(bool yes, uint256 amount, uint256 minShares, uint256 deadline) external nonReentrant {
-        _open(deadline);
+    function buy(bool yes, uint256 amount, uint256 minShares, uint256 deadline) external nonReentrant whenOpen(deadline) {
         uint256 quantity = quoteBuy(yes, amount);
         require(quantity >= minShares, "Price moved");
         if (yes) qYes += quantity; else qNo += quantity;
@@ -72,8 +72,7 @@ contract Market is ReentrancyGuard {
         collateral.safeTransferFrom(msg.sender, address(this), amount);
         emit Traded(msg.sender, yes, true, quantity, amount);
     }
-    function sell(bool yes, uint256 quantity, uint256 minAmount, uint256 deadline) external nonReentrant {
-        _open(deadline);
+    function sell(bool yes, uint256 quantity, uint256 minAmount, uint256 deadline) external nonReentrant whenOpen(deadline) {
         require(shares[msg.sender][yes] >= quantity, "Insufficient shares");
         uint256 amount = quoteSell(yes, quantity);
         require(amount > 0 && amount >= minAmount, "Price moved");
@@ -106,7 +105,8 @@ contract Market is ReentrancyGuard {
         collateral.safeTransfer(creator, collateral.balanceOf(address(this)) - reserved);
     }
     // we assert that the market is open
-    function _open(uint256 deadline) private view {
+    modifier whenOpen(uint256 deadline) {
         require(funded && !resolved && block.timestamp < closesAt && block.timestamp <= deadline, "Unavailable");
+        _; // body inserted here
     }
 }
