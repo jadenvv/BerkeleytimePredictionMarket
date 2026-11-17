@@ -7,6 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {LMSRMath} from "./LMSRMath.sol";
 
 // Ideas based on https://medium.com/gnosis-pm/radical-markets-for-elephants-a742916812db
+// https://www.cultivatelabs.com/crowdsourced-forecasting-guide/how-does-logarithmic-market-scoring-rule-lmsr-work
 
 //TODO: fee needs to be considered
 //in the UI
