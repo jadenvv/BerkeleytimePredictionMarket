@@ -49,7 +49,7 @@ contract Market is ReentrancyGuard {
     }
     // calculate price for buying shares, rounding in the pool's favor
     function quoteBuy(bool yes, uint256 amount) public view returns (uint256 quantity) {
-        require(amount >= 1e6 && amount <= 1_000_000e6, "Invalid amount");
+        require(amount >= 1e6 && amount <= 25e6, "Invalid amount");
         quantity = LMSRMath.sharesForAmount(yes, amount * SCALE, qYes * SCALE, qNo * SCALE, B) / SCALE;
         require(quantity > 1, "Trade too small");
         --quantity; // Round in the pool's favor, including fixed-point approximation.
