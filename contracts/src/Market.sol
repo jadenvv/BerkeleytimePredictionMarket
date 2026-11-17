@@ -88,15 +88,14 @@ contract Market is ReentrancyGuard {
         result = yes;
         emit Resolved(yes);
     }
-    // you can redeem your shares after resolved
+    // redeem winning shares after resolution
     function redeem(bool yes) external nonReentrant {
-        uint256 quantity = shares[msg.sender][yes];
-        require(resolved && quantity > 0, "Unavailable");
-        uint256 amount = result == yes ? quantity : 0;
-        delete shares[msg.sender][yes];
-        if (yes) qYes -= quantity; else qNo -= quantity;
+        uint256 amount = shares[msg.sender][yes];
+        require(resolved && yes == result && amount > 0, "Unavailable");
+        delete shares[msg.sender][yes]; // remove to prevent duplication
+        if (yes) qYes -= amount; else qNo -= amount;
         collateral.safeTransfer(msg.sender, amount);
-        emit Redeemed(msg.sender, yes, quantity, amount);
+        emit Redeemed(msg.sender, yes, amount, amount);
     }
     // the creator can withdraw surplus
     // theoretically the creator can lose money from their funding
