@@ -168,19 +168,26 @@ export class OnchainProtocol implements Protocol {
   async quoteBuy(id: string, _outcome: string, side: Side, amount: number): Promise<Quote> {
     this.checkMarket(id);
     const raw = await this.market.quoteBuy(side === 'yes', tokenUnits(amount)) as bigint;
+    const [feeRaw, feeBps] = await Promise.all([this.market.calculateFee(tokenUnits(amount)), this.market.fee()]);
+    const total = numeric(tokenUnits(amount) + BigInt(feeRaw));
     const shares = numeric(raw), o = this.state.events[this.id].outcomes[0];
-    return { shares, amount: numeric(tokenUnits(amount)), avgPrice: amount / shares, payout: shares, newPriceYes: priceYes(o.qYes + (side === 'yes' ? shares : 0), o.qNo + (side === 'no' ? shares : 0), o.b), rawOutput: raw.toString() };
+    return { shares, amount: total, fee: numeric(feeRaw), feeBps: Number(feeBps), avgPrice: total / shares, payout: shares, newPriceYes: priceYes(o.qYes + (side === 'yes' ? shares : 0), o.qNo + (side === 'no' ? shares : 0), o.b), rawOutput: raw.toString() };
   }
   async quoteSell(id: string, _outcome: string, side: Side, quantity: number): Promise<Quote> {
     this.checkMarket(id);
     const raw = await this.market.quoteSell(side === 'yes', tokenUnits(quantity)) as bigint;
-    const amount = numeric(raw), shares = numeric(tokenUnits(quantity)), o = this.state.events[this.id].outcomes[0];
-    return { shares, amount, avgPrice: amount / shares, payout: 0, newPriceYes: priceYes(o.qYes - (side === 'yes' ? shares : 0), o.qNo - (side === 'no' ? shares : 0), o.b), rawOutput: raw.toString() };
+    const [feeRaw, feeBps] = await Promise.all([this.market.calculateFee(raw), this.market.fee()]);
+    const net = raw - BigInt(feeRaw);
+    const amount = numeric(net), shares = numeric(tokenUnits(quantity)), o = this.state.events[this.id].outcomes[0];
+    return { shares, amount, fee: numeric(feeRaw), feeBps: Number(feeBps), avgPrice: amount / shares, payout: 0, newPriceYes: priceYes(o.qYes - (side === 'yes' ? shares : 0), o.qNo - (side === 'no' ? shares : 0), o.b), rawOutput: net.toString() };
   }
   private async trade(account: Address, id: string, side: Side, value: number, limits: TradeLimits | undefined, buy: boolean) {
     this.checkMarket(id);
     if (!limits || limits.deadline <= Date.now() / 1000 || !/^\d+$/.test(limits.minOutput)) throw new Error('Get a fresh quote before trading.');
-    if (buy) await this.approve(account, tokenUnits(value));
+    if (buy) {
+      const amount = tokenUnits(value);
+      await this.approve(account, amount + BigInt(await this.market.calculateFee(amount)));
+    }
     const contract = this.market.connect(await this.wallet(account)) as Contract;
     const receipt = await this.confirm(await contract[buy ? 'buy' : 'sell'](side === 'yes', tokenUnits(value), BigInt(limits.minOutput), limits.deadline));
     const log = receipt.logs.find(l => lower(l.address) === this.id && l.topics[0] === this.market.interface.getEvent('Traded')!.topicHash)!;

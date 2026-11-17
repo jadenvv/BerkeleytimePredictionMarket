@@ -6,6 +6,8 @@ export interface Quote {
   shares: number;
   /** USDC in (buy) or out (sell). */
   amount: number;
+  fee: number;
+  feeBps: number;
   avgPrice: number;
   /** YES probability after the trade. */
   newPriceYes: number;

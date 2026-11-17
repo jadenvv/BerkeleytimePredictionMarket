@@ -199,6 +199,8 @@ export function TradePanel({
 
       {quote && quote.shares > 0 && (
         <dl className="mt-5 space-y-2 text-sm tabular">
+          <Row label={`Fee (${quote.feeBps / 100}%)`} value={usd(quote.fee, quote.fee > 0 && quote.fee < 0.01 ? 6 : 2)} />
+          {mode === "buy" && <Row label="Total cost" value={usd(quote.amount)} />}
           <Row label="Avg price" value={cents(quote.avgPrice)} />
           {mode === "buy" ? (
             <>
@@ -241,7 +243,7 @@ export function TradePanel({
         ) : (
           <button
             onClick={submit}
-            disabled={pending || closed || needsFunding || unavailable || !quote || value <= 0 || (mode === "buy" ? value > balance : value > held)}
+            disabled={pending || closed || needsFunding || unavailable || !quote || value <= 0 || (mode === "buy" ? (quote?.amount ?? value) > balance : value > held)}
             className={`w-full rounded-lg py-3 text-sm font-semibold text-white disabled:opacity-50 ${
               side === "yes" ? "bg-yes hover:brightness-95" : "bg-no hover:brightness-95"
             }`}

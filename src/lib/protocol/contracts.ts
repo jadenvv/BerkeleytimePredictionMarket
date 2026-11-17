@@ -1,5 +1,7 @@
 // Matches contracts/src/Market.sol. ABI compatibility is checked by the tests.
 export const MARKET_ABI = [
+  "function fee() view returns (uint256)",
+  "function calculateFee(uint256) view returns (uint256)",
   "function collateral() view returns (address)",
   "function creator() view returns (address)",
   "function closesAt() view returns (uint64)",
