@@ -67,7 +67,8 @@ contract Market is ReentrancyGuard {
     function buy(bool yes, uint256 amount, uint256 minShares, uint256 deadline) external nonReentrant whenOpen(deadline) {
         uint256 quantity = quoteBuy(yes, amount);
         require(quantity >= minShares, "Price moved");
-        if (yes) qYes += quantity; else qNo += quantity;
+        if (yes) qYes += quantity;
+        else qNo += quantity;
         shares[msg.sender][yes] += quantity;
         collateral.safeTransferFrom(msg.sender, address(this), amount);
         emit Traded(msg.sender, yes, true, quantity, amount);
@@ -76,7 +77,8 @@ contract Market is ReentrancyGuard {
         require(shares[msg.sender][yes] >= quantity, "Insufficient shares");
         uint256 amount = quoteSell(yes, quantity);
         require(amount > 0 && amount >= minAmount, "Price moved");
-        if (yes) qYes -= quantity; else qNo -= quantity;
+        if (yes) qYes -= quantity;
+        else qNo -= quantity;
         shares[msg.sender][yes] -= quantity;
         collateral.safeTransfer(msg.sender, amount);
         emit Traded(msg.sender, yes, false, quantity, amount);
@@ -92,7 +94,8 @@ contract Market is ReentrancyGuard {
         uint256 amount = shares[msg.sender][yes];
         require(resolved && yes == result && amount > 0, "Unavailable");
         delete shares[msg.sender][yes]; // remove to prevent duplication
-        if (yes) qYes -= amount; else qNo -= amount;
+        if (yes) qYes -= amount;
+        else qNo -= amount;
         collateral.safeTransfer(msg.sender, amount);
         emit Redeemed(msg.sender, yes, amount, amount);
     }
