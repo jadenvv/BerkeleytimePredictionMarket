@@ -3,33 +3,24 @@
 import "@rainbow-me/rainbowkit/styles.css";
 import { lightTheme, RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useAccount, useAccountEffect, useConnect, useConnectors, WagmiProvider } from "wagmi";
-import { demoWasConnected, rememberDemo, wagmiConfig } from "@/lib/wagmi";
+import { useEffect, useState, type ReactNode } from "react";
+import { useAccount, WagmiProvider } from "wagmi";
+import { useEthersSigner } from "@/lib/ethers";
+import { protocol } from "@/lib/protocol";
+import { wagmiConfig } from "@/lib/wagmi";
 
-/**
- * The mock connector behind "Demo wallet" can't persist its session, so
- * remember it ourselves and restore it once after the page loads.
- */
-function DemoSession() {
-  const { status } = useAccount();
-  const connectors = useConnectors();
-  const { connect } = useConnect();
-  const tried = useRef(false);
-
-  useAccountEffect({
-    onConnect: ({ connector }) => rememberDemo(connector.type === "mock"),
-    onDisconnect: () => rememberDemo(false),
-  });
-
+function ProtocolSession() {
+  const { address, chainId } = useAccount();
+  const signer = useEthersSigner();
   useEffect(() => {
-    if (tried.current || status !== "disconnected") return;
-    tried.current = true;
-    if (!demoWasConnected()) return;
-    const demo = connectors.find((c) => c.type === "mock");
-    if (demo) connect({ connector: demo });
-  }, [status, connectors, connect]);
-
+    try {
+      localStorage.removeItem("btm:state:v1");
+      localStorage.removeItem("btm:demo-connected");
+    } catch { /* Storage may be unavailable. */ }
+  }, []);
+  useEffect(() => {
+    protocol.setWallet(signer, address, chainId);
+  }, [signer, address, chainId]);
   return null;
 }
 
@@ -46,7 +37,7 @@ export function Providers({ children }: { children: ReactNode }) {
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider theme={theme} modalSize="compact" appInfo={{ appName: "Berkeleytime Markets" }}>
-          <DemoSession />
+          <ProtocolSession />
           {children}
         </RainbowKitProvider>
       </QueryClientProvider>

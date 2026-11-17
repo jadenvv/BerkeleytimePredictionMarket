@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import { Navbar } from "@/components/Navbar";
+import { ProtocolStatus } from "@/components/ProtocolStatus";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <Suspense fallback={<div className="h-16 border-b border-line" />}>
             <Navbar />
           </Suspense>
+          <ProtocolStatus />
           <main className="flex-1">{children}</main>
           <footer className="border-t border-line py-6 text-center text-xs text-muted">
             Berkeleytime Markets · Testnet preview · Not affiliated with UC Berkeley

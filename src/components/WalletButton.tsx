@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useDisconnect } from "wagmi";
 import { useEthersProvider } from "@/lib/ethers";
-import { useAccount, useBalance } from "@/lib/protocol";
+import { useAccount, useBalance, useProtocolState } from "@/lib/protocol";
 import { shortAddress, usd } from "@/lib/format";
 
 /** Native gas-token balance on the active chain, read through ethers.js. */
@@ -54,7 +54,7 @@ export function WalletButton() {
             </button>
           );
         }
-        return <Connected chainName={chain.name ?? "Base Sepolia"} openAccountModal={openAccountModal} />;
+        return <Connected chainName={chain.name ?? "Ethereum Sepolia"} openAccountModal={openAccountModal} />;
       }}
     </ConnectButton.Custom>
   );
@@ -69,6 +69,7 @@ function Connected({
 }) {
   const { address } = useAccount();
   const cash = useBalance(address);
+  const { loading, error } = useProtocolState();
   const gas = useGasBalance(address);
   const { disconnect } = useDisconnect();
   const [open, setOpen] = useState(false);
@@ -89,7 +90,7 @@ function Connected({
     <div ref={ref} className="relative flex items-center gap-3">
       <Link href="/portfolio" className="hidden sm:block text-right leading-tight">
         <div className="text-[11px] text-muted">Cash</div>
-        <div className="text-sm font-semibold tabular">{usd(cash)}</div>
+        <div className="text-sm font-semibold tabular">{loading || error ? "—" : usd(cash)}</div>
       </Link>
       <button
         onClick={() => setOpen((o) => !o)}

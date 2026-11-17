@@ -8,7 +8,6 @@ import { WalletButton } from "./WalletButton";
 const LINKS = [
   { href: "/", label: "Markets" },
   { href: "/portfolio", label: "Portfolio" },
-  { href: "/create", label: "Create" },
 ];
 
 export function Logo() {

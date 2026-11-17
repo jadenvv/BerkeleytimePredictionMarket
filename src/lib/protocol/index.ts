@@ -1,18 +1,27 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useAccount as useWagmiAccount } from "wagmi";
-import { MockProtocol } from "./mock";
+import { OnchainProtocol } from "./onchain";
+import { chainConfig } from "./config";
 import type { Address, ProtocolState } from "./types";
 
-export type { Address, Quote, NewMarketInput, Protocol } from "./types";
-export { positionValue } from "./mock";
+export type { Address, Quote, Protocol } from "./types";
+export { positionValue } from "./positions";
 
-/**
- * The active protocol implementation. Swap for an on-chain implementation
- * once the contracts are deployed.
- */
-export const protocol = new MockProtocol();
+/** All market data comes from the configured Ethereum Sepolia contract. */
+export const protocol = new OnchainProtocol(chainConfig);
+
+export function useNow() {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1000);
+    return () => { clearTimeout(first); clearInterval(timer); };
+  }, []);
+  return now;
+}
 
 export function useProtocolState(): ProtocolState {
   return useSyncExternalStore(protocol.subscribe, protocol.getState, protocol.getServerState);
@@ -33,11 +42,11 @@ export function useHydrated() {
  * Wallet connection, reported as disconnected until hydration completes so
  * the client's first render matches the server HTML.
  */
-export function useAccount(): { address?: Address; isConnected: boolean } {
-  const { address, isConnected } = useWagmiAccount();
+export function useAccount(): { address?: Address; isConnected: boolean; chainId?: number } {
+  const { address, isConnected, chainId } = useWagmiAccount();
   const hydrated = useHydrated();
   if (!hydrated) return { address: undefined, isConnected: false };
-  return { address: address as Address | undefined, isConnected };
+  return { address: address?.toLowerCase() as Address | undefined, isConnected, chainId };
 }
 
 export function useBalance(address?: Address) {

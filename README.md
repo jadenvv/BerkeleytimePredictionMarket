@@ -8,11 +8,11 @@ Berkeleytime Markets lets students bet on questions about Berkeley courses. Exam
 
 Prices come from a **Logarithmic Market Scoring Rule (LMSR)** automated market maker instead of an order book. That means there is always a counterparty, even in a small market with only a few traders, and each trade moves the price smoothly according to how much was bought or sold. Anyone can create a market. The creator puts up a small liquidity subsidy, which is the market maker's maximum possible loss (`b · ln 2` USDC per outcome).
 
-Markets will settle against public **Berkeleytime** data through an optimistic oracle: someone proposes the result, and it is accepted unless someone disputes it. Shares can then be redeemed for USDC. The project runs on **Base Sepolia** with test USDC, so anyone can try it without risking real money.
+The current contract lets the **market creator choose the final YES or NO result** after trading closes. Winning shares can then be redeemed for USDC. There is no oracle or dispute process: traders must trust the creator. The frontend targets **Ethereum Sepolia** and six-decimal test USDC.
 
-The project has two parts: a **Next.js frontend** (RainbowKit, wagmi and ethers.js for wallets, and Recharts for price history) and a set of **Solidity contracts** built with Foundry. The frontend is complete and currently runs against a simulated in-browser protocol. The contracts are being built one part at a time and will replace that simulation.
+The project has two parts: a **Next.js frontend** (RainbowKit, wagmi and ethers.js for wallets, and Recharts for price history) and **Solidity contracts** built with Foundry. The frontend connects to one configured, existing `Market` contract on Ethereum Sepolia (chain ID **11155111**).
 
-> **Status:** The frontend is fully usable with simulated on-chain state (`MockProtocol`, saved in `localStorage`). On the contracts side, `MockUSDC` (the test-USDC faucet) and `LMSRMath` (fixed-point pricing) are done and tested. The share token, the market, the factory and resolution are still to come. See [`contracts/README.md`](contracts/README.md).
+> **Status:** `Market.sol` supports funding, buying, selling, creator resolution, redemption and surplus withdrawal. These actions are connected to the UI. Balances, positions, price history and activity come from the configured contract. There are no seeded markets, simulated balances or demo wallets. No deployment is included in UI setup.
 
 ## Run it
 
@@ -21,7 +21,40 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000, click **Connect wallet**, and pick **Demo wallet** (no browser extension needed) or a browser wallet. Then click **Get 1,000 test USDC** and start trading.
+Configure an existing contract as described below, then open http://localhost:3000 and connect an Ethereum Sepolia wallet. Until a contract is configured, the app shows a configuration message and no markets.
+
+### Connect an existing contract
+
+Copy `.env.example` to `.env.local`, then set:
+
+```dotenv
+NEXT_PUBLIC_MARKET_ADDRESS=0x...existing_Market_address
+NEXT_PUBLIC_MARKET_START_BLOCK=12345678
+NEXT_PUBLIC_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+```
+
+Use the contract's actual deployment block so the UI can reconstruct complete trade history. Restart the dev server (or rebuild for production) after changing these public settings. Use an RPC endpoint that permits browser requests and historical log reads. Never put private keys in `NEXT_PUBLIC_*` variables.
+
+Public Sepolia deployment addresses, deployment blocks and creation transactions are recorded in [`deployments/sepolia.json`](deployments/sepolia.json).
+
+Connect a browser wallet on Ethereum Sepolia with test ETH for gas. The UI discovers the collateral address from the contract. If it is `MockUSDC`, the portfolio offers its daily test-USDC faucet. The creator first funds the market with **69.314719 USDC**; the UI requests a token approval when needed and waits for each transaction receipt. Traders can buy or sell with a minimum output of 99% of the displayed contract quote and a two-minute deadline.
+
+After closing, the creator can resolve YES or NO from the market page. Holders can redeem winning shares or clear losing shares, and the creator can withdraw surplus without taking collateral reserved for winners. The current contract has no factory, so market creation is not available in the UI. This setup neither deploys a contract nor changes an existing one automatically.
+
+The app always uses Ethereum Sepolia. Missing configuration or RPC failures are displayed without substituting sample data. The old `NEXT_PUBLIC_PROTOCOL` selector is no longer used, and any saved demo state is cleared from this app’s browser storage.
+
+### Checks
+
+```bash
+npm run lint
+npm run build
+npm test                 # ABI compatibility and adapter lifecycle against a fake RPC
+npx playwright install chromium  # once, if needed
+npm run test:e2e         # browser lifecycle against the same fake RPC
+forge test --root contracts
+```
+
+The UI tests do not deploy contracts or submit public-network transactions. They validate wallet requests, receipts and screen updates against a deterministic JSON-RPC fixture; Foundry separately tests the Solidity behavior. A real wallet/contract smoke test still requires an existing deployment and its configuration.
 
 ### Contracts
 
@@ -34,21 +67,21 @@ forge test -vv
 ### Wallets (RainbowKit + ethers.js)
 
 - **RainbowKit** provides the connect modal, themed to match the site. The navbar button is a `ConnectButton.Custom`, so it keeps the Kalshi-style look.
-- **ethers.js** uses the same connection through `src/lib/ethers.ts` (`useEthersProvider`, `useEthersSigner`). The wallet menu reads your Base Sepolia ETH balance with it, and the on-chain protocol will use the signer to call the contracts.
+- **ethers.js** uses the same connection through `src/lib/ethers.ts` (`useEthersProvider`, `useEthersSigner`). The wallet menu reads your Ethereum Sepolia ETH balance with it, and the on-chain protocol uses the signer for contract transactions.
 - **WalletConnect** (mobile wallets and QR codes) needs a free project ID from https://cloud.reown.com:
 
   ```bash
-  echo "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your-id" > .env.local
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your-id
   ```
 
-  Without it, the connect modal lists only browser-extension wallets, Coinbase Wallet and the Demo wallet.
+  Add that setting to `.env.local`. Without it, the connect modal lists browser-extension wallets and Coinbase Wallet.
 
 ## How it works
 
-- **Markets:** An *event* (for example "CS 61A Fall 2026 average GPA?") contains one or more binary YES/NO *outcomes*, the same way Kalshi structures events. An event with a single outcome is shown as a plain Yes/No market.
+- **Markets:** The UI displays one binary YES/NO market at the configured address.
 - **Pricing:** Each outcome has its own LMSR market maker (`src/lib/lmsr.ts`, ported to `contracts/src/LMSRMath.sol`). A share pays $1 USDC if it is correct, so price = probability.
-- **Permissionless creation:** Anyone can create a market. The creator pays `b · ln 2` USDC per outcome as a liquidity subsidy.
-- **Resolution (planned):** An optimistic oracle that uses Berkeleytime data as its resolution source, followed by `redeem`.
+- **Funding:** The creator deposits the contract's fixed `SUBSIDY` before trading opens. Creating additional contracts is separate from this UI.
+- **Resolution:** The creator calls `resolve` after closing. Holders call `redeem`, and the creator can call `withdrawSurplus` after resolution.
 
 ## Layout
 
@@ -56,27 +89,23 @@ forge test -vv
 src/
   lib/
     lmsr.ts             LMSR math (the reference for LMSRMath.sol)
-    seed.ts             Seed markets (deterministic, so the server render matches the client)
     types.ts            Market / outcome / position / trade types
-    wagmi.ts            Wallet config (RainbowKit wallets + Demo wallet, Base Sepolia)
+    wagmi.ts            Wallet config (RainbowKit wallets, Ethereum Sepolia)
     ethers.ts           ethers.js provider/signer adapters over wagmi
     protocol/
       types.ts          `Protocol` interface: the boundary between the UI and the contracts
-      mock.ts           localStorage-backed implementation
+      positions.ts      Position valuation from contract quantities and results
+      onchain.ts        Existing Market contract, receipts and event history
+      contracts.ts      Market and collateral ABIs
+      config.ts         Public contract/RPC configuration
       index.ts          Active protocol instance + React hooks
   components/           Navbar, WalletButton, MarketCard, PriceChart, TradePanel
   app/                  /, /markets/[id], /portfolio, /create
 contracts/
-  src/                  MockUSDC.sol, LMSRMath.sol
+  src/                  Market.sol, MockUSDC.sol, LMSRMath.sol
   test/                 Foundry tests
 ```
 
 ## Roadmap
 
-The UI only talks to the `Protocol` interface (`src/lib/protocol/types.ts`). To go fully on-chain, add an ethers.js implementation of that interface using `useEthersSigner()` and swap it in at `src/lib/protocol/index.ts`. Remaining contract work:
-
-- ERC-1155 outcome shares
-- An LMSR market contract with `buy` / `sell`
-- `MarketFactory`, with a permissionless `createMarket` that collects the LMSR subsidy
-- Oracle resolution and `redeem`
-- A deploy script, plus an indexer (or event reads) to supply price history and activity
+The current scope is one creator-resolved binary contract, with shares held in the contract's internal balances. Multi-market discovery/creation and independent resolution would require additional contract design. The UI currently replays paginated contract events on refresh; a larger deployment may need an indexer or persistent log cache.

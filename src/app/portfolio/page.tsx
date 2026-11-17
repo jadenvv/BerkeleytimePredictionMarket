@@ -1,4 +1,5 @@
 "use client";
+import { marketChain } from "@/lib/protocol/config";
 
 import Link from "next/link";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
@@ -12,14 +13,19 @@ import {
   usePositions,
   useProtocolState,
 } from "@/lib/protocol";
+import { OnchainProtocol, transactionError } from "@/lib/protocol/onchain";
+import { useNow } from "@/lib/protocol";
 import { cents, dateTime, usd } from "@/lib/format";
 
 export default function PortfolioPage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const state = useProtocolState();
   const balance = useBalance(address);
   const positions = usePositions(address);
   const [minting, setMinting] = useState(false);
+  const [error, setError] = useState("");
+  const [redeeming, setRedeeming] = useState("");
+  const now = useNow();
   const { openConnectModal } = useConnectModal();
 
   if (!isConnected || !address) {
@@ -37,6 +43,13 @@ export default function PortfolioPage() {
     );
   }
 
+  if (state.loading || state.error) return (
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      <h1 className="text-2xl font-bold">Portfolio</h1>
+      <p className="mt-4 text-muted">{state.loading ? "Loading your on-chain balances…" : "Portfolio unavailable until the market connection is configured and working."}</p>
+    </div>
+  );
+
   const rows = positions.map((p) => {
     const ev = state.events[p.eventId];
     const value = positionValue(ev, p);
@@ -45,6 +58,7 @@ export default function PortfolioPage() {
   const invested = rows.reduce((s, r) => s + r.value, 0);
   const pnl = rows.reduce((s, r) => s + r.pnl, 0);
   const history = state.trades.filter((t) => t.account === address);
+  const unavailable = !!state.error || !!state.loading || (chainId !== marketChain.id);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -54,15 +68,17 @@ export default function PortfolioPage() {
         <Stat label="Portfolio value" value={usd(balance + invested)} />
         <Stat label="Cash (USDC)" value={usd(balance)}>
           <button
-            disabled={minting}
+            disabled={minting || unavailable || state.canFaucet === false || now < (state.faucetAvailableAt ?? 0)}
             onClick={async () => {
               setMinting(true);
-              await protocol.faucet(address);
-              setMinting(false);
+              setError("");
+              try { await protocol.faucet(address); }
+              catch (e) { setError(transactionError(e)); }
+              finally { setMinting(false); }
             }}
             className="mt-3 rounded-full bg-brand px-3 py-1 text-xs font-semibold text-white hover:bg-brand-dark disabled:opacity-60"
           >
-            {minting ? "Minting…" : "+ 1,000 test USDC"}
+            {minting ? "Minting…" : state.canFaucet === false ? "No faucet for this token" : now < (state.faucetAvailableAt ?? 0) ? "Faucet available after 24 hours" : "+ 1,000 test USDC"}
           </button>
         </Stat>
         <Stat
@@ -71,6 +87,9 @@ export default function PortfolioPage() {
           tone={pnl > 0 ? "text-yes" : pnl < 0 ? "text-down" : undefined}
         />
       </div>
+
+      {error && <p role="alert" className="mt-4 text-sm text-down">{error}</p>}
+      {chainId !== marketChain.id && <p className="mt-4 text-sm text-down">Switch your wallet to Ethereum Sepolia to use the faucet or redeem shares.</p>}
 
       <section className="mt-10">
         <h2 className="text-lg font-bold">Positions</h2>
@@ -123,6 +142,17 @@ export default function PortfolioPage() {
                       <td className={`px-4 py-3 text-right ${pnl >= 0 ? "text-yes" : "text-down"}`}>
                         {pnl >= 0 ? "+" : ""}
                         {usd(pnl)}
+                        {ev?.contractAddress && ev.status === "resolved" && <button
+                          className="ml-3 rounded bg-brand px-2 py-1 text-xs text-white disabled:opacity-50"
+                          disabled={!!redeeming || unavailable}
+                          onClick={async () => {
+                            if (!(protocol instanceof OnchainProtocol)) return;
+                            setRedeeming(p.side); setError("");
+                            try { await protocol.redeem(address, p.side); }
+                            catch (e) { setError(transactionError(e)); }
+                            finally { setRedeeming(""); }
+                          }}
+                        >{redeeming === p.side ? "Redeeming…" : "Redeem"}</button>}
                       </td>
                     </tr>
                   );

@@ -1,0 +1,36 @@
+// Matches contracts/src/Market.sol. ABI compatibility is checked by the tests.
+export const MARKET_ABI = [
+  "function collateral() view returns (address)",
+  "function creator() view returns (address)",
+  "function closesAt() view returns (uint64)",
+  "function question() view returns (string)",
+  "function funded() view returns (bool)",
+  "function resolved() view returns (bool)",
+  "function result() view returns (bool)",
+  "function B() view returns (uint256)",
+  "function SUBSIDY() view returns (uint256)",
+  "function qYes() view returns (uint256)",
+  "function qNo() view returns (uint256)",
+  "function shares(address,bool) view returns (uint256)",
+  "function quoteBuy(bool,uint256) view returns (uint256)",
+  "function quoteSell(bool,uint256) view returns (uint256)",
+  "function fund()",
+  "function buy(bool,uint256,uint256,uint256)",
+  "function sell(bool,uint256,uint256,uint256)",
+  "function resolve(bool)",
+  "function redeem(bool)",
+  "function withdrawSurplus()",
+  "event Traded(address indexed account,bool yes,bool buy,uint256 quantity,uint256 amount)",
+  "event Resolved(bool yes)",
+  "event Redeemed(address indexed account,bool yes,uint256 quantity,uint256 amount)",
+] as const;
+
+export const COLLATERAL_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
+  "function faucet()",
+  "function FAUCET_AMOUNT() view returns (uint256)",
+  "function FAUCET_COOLDOWN() view returns (uint256)",
+  "function lastFaucetAt(address) view returns (uint256)",
+] as const;

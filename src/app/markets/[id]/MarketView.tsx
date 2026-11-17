@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { CourseTile, outcomePrice, totalVolume } from "@/components/MarketCard";
 import { PriceChart, SERIES_COLORS } from "@/components/PriceChart";
+import { MarketControls } from "@/components/MarketControls";
 import { TradePanel } from "@/components/TradePanel";
 import { positionValue, useAccount, useMarket, usePositions, useProtocolState } from "@/lib/protocol";
 import { cents, compactUsd, date, dateTime, pct, shortAddress, usd } from "@/lib/format";
@@ -14,6 +15,7 @@ export function MarketView() {
   const { id } = useParams<{ id: string }>();
   const search = useSearchParams();
   const ev = useMarket(id);
+  const { loading, error } = useProtocolState();
 
   const [outcomeId, setOutcomeId] = useState(search.get("outcome") ?? "");
   const [side, setSide] = useState<Side>(search.get("side") === "no" ? "no" : "yes");
@@ -21,7 +23,7 @@ export function MarketView() {
   if (!ev) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-20 text-center">
-        <p className="text-lg font-semibold">Market not found</p>
+        <p className="text-lg font-semibold">{loading ? "Loading market…" : error ? "Market unavailable" : "Market not found"}</p>
         <Link href="/" className="mt-2 inline-block text-brand hover:underline">
           Back to markets
         </Link>
@@ -91,7 +93,7 @@ export function MarketView() {
         <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-b border-line pb-4 text-xs text-muted tabular">
           <span>{compactUsd(totalVolume(ev))} volume</span>
           <span>Closes {date(ev.closesAt)}</span>
-          <span>Resolves ~{date(ev.resolvesAt)}</span>
+          <span>{ev.contractAddress ? "Creator resolves after closing" : `Resolves ~${date(ev.resolvesAt)}`}</span>
         </div>
 
         {!binary && (
@@ -159,12 +161,13 @@ export function MarketView() {
           <p className="mt-2 text-sm leading-relaxed text-foreground/80">{ev.rules}</p>
           <dl className="mt-4 grid gap-3 rounded-xl bg-subtle p-4 text-sm sm:grid-cols-2">
             <Info label="Resolution source" value={ev.source} />
-            <Info label="Oracle" value="Optimistic oracle · 48h dispute window" />
-            <Info label="Collateral" value="USDC on Base" />
+            <Info label="Resolution" value={"Creator decides · final result"} />
+            <Info label="Collateral" value={"USDC on Ethereum Sepolia"} />
             <Info label="Created by" value={shortAddress(ev.creator)} mono />
           </dl>
         </section>
 
+        <MarketControls ev={ev} />
         <Activity ev={ev} />
       </div>
 

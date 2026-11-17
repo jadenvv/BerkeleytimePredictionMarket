@@ -59,6 +59,11 @@ export interface MarketEvent {
   createdAt: number;
   status: MarketStatus;
   outcomes: Outcome[];
+  /** Present when this event comes from the configured Market contract. */
+  contractAddress?: `0x${string}`;
+  funded?: boolean;
+  subsidy?: number;
+  surplus?: number;
 }
 
 export interface Position {

@@ -8,6 +8,7 @@ import type { NextConfig } from "next";
 const EMPTY = "./src/lib/stubs/empty.js";
 
 const nextConfig: NextConfig = {
+  distDir: process.env.PLAYWRIGHT_TEST ? '.next-test' : '.next',
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

@@ -1,10 +1,13 @@
 "use client";
+import { marketChain } from "@/lib/protocol/config";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
-import { protocol, useAccount, useBalance, usePositions } from "@/lib/protocol";
+import { protocol, useAccount, useBalance, usePositions, useNow, useProtocolState } from "@/lib/protocol";
 import { priceOf } from "@/lib/lmsr";
 import { cents, pct, usd } from "@/lib/format";
+import type { Quote } from "@/lib/protocol/types";
+import { transactionError } from "@/lib/protocol/onchain";
 import type { MarketEvent, Side } from "@/lib/types";
 
 const QUICK_AMOUNTS = [1, 10, 50, 100];
@@ -20,7 +23,7 @@ export function TradePanel({
   side: Side;
   onSideChange: (s: Side) => void;
 }) {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const balance = useBalance(address);
   const positions = usePositions(address);
   const { openConnectModal } = useConnectModal();
@@ -33,35 +36,57 @@ export function TradePanel({
 
   const o = ev.outcomes.find((x) => x.id === outcomeId) ?? ev.outcomes[0];
   const binary = ev.outcomes.length === 1;
-  const yesPrice = priceOf("yes", o.qYes, o.qNo, o.b);
+  const yesPrice = o.result ? o.result === "yes" ? 1 : 0 : priceOf("yes", o.qYes, o.qNo, o.b);
   const held =
     positions.find((p) => p.eventId === ev.id && p.outcomeId === o.id && p.side === side)?.shares ?? 0;
 
   const value = Number(input) || 0;
-  const quote =
-    value > 0
-      ? mode === "buy"
-        ? protocol.quoteBuy(ev.id, o.id, side, value)
-        : protocol.quoteSell(ev.id, o.id, side, Math.min(value, held))
-      : null;
-  const closed = ev.status !== "open";
+  const now = useNow();
+  const state = useProtocolState();
+  const key = `${ev.id}:${o.id}:${side}:${mode}:${value}:${o.qYes}:${o.qNo}`;
+  const [quoted, setQuoted] = useState<{ key: string; quote?: Quote; error?: string; deadline: number }>();
+  useEffect(() => {
+    if (!(value > 0) || !Number.isFinite(value)) return;
+    let cancelled = false;
+    const update = async () => {
+      const deadline = Math.floor(Date.now() / 1000) + 120;
+      try {
+        const quote = await (mode === "buy"
+          ? protocol.quoteBuy(ev.id, o.id, side, value)
+          : protocol.quoteSell(ev.id, o.id, side, value));
+        if (!cancelled) setQuoted({ key, quote, deadline });
+      } catch (error) {
+        if (!cancelled) setQuoted({ key, error: transactionError(error), deadline });
+      }
+    };
+    void update();
+    const timer = setInterval(update, 15_000);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [key, ev.id, o.id, side, mode, value]);
+  const current = quoted?.key === key && quoted.deadline > now / 1000 ? quoted : undefined;
+  const quote = current?.quote;
+  const closed = ev.status !== "open" || now >= ev.closesAt;
+  const unavailable = !!state.error || !!state.loading || (chainId !== marketChain.id);
+  const needsFunding = ev.funded === false;
 
   async function submit() {
-    if (!address) return;
+    if (!address || !quote || !current) return;
     setPending(true);
     setError(null);
     setNotice(null);
     try {
+      const rawOutput = quote.rawOutput ?? String(Math.floor((mode === "buy" ? quote.shares : quote.amount) * 1e6));
+      const limits = { minOutput: (BigInt(rawOutput) * BigInt(99) / BigInt(100)).toString(), deadline: current.deadline };
       const t =
         mode === "buy"
-          ? await protocol.buy(address, ev.id, o.id, side, value)
-          : await protocol.sell(address, ev.id, o.id, side, value);
+          ? await protocol.buy(address, ev.id, o.id, side, value, limits)
+          : await protocol.sell(address, ev.id, o.id, side, value, limits);
       setNotice(
         `${mode === "buy" ? "Bought" : "Sold"} ${t.shares.toFixed(2)} ${side.toUpperCase()} @ ${cents(t.price)} · tx ${t.txHash.slice(0, 10)}…`,
       );
       setInput("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(transactionError(e));
     } finally {
       setPending(false);
     }
@@ -70,8 +95,10 @@ export function TradePanel({
   async function faucet() {
     if (!address) return;
     setPending(true);
-    await protocol.faucet(address);
-    setPending(false);
+    setError(null);
+    try { await protocol.faucet(address); }
+    catch (e) { setError(transactionError(e)); }
+    finally { setPending(false); }
   }
 
   return (
@@ -142,7 +169,7 @@ export function TradePanel({
             id="amount"
             inputMode="decimal"
             value={input}
-            onChange={(e) => setInput(e.target.value.replace(/[^0-9.]/g, ""))}
+            onChange={(e) => setInput(e.target.value.replace(/[^0-9.]/g, "").replace(/(\.\d{6}).*/, "$1"))}
             placeholder="0"
             className="w-full bg-transparent py-3 pl-1 text-right text-xl font-semibold outline-none tabular"
           />
@@ -161,7 +188,7 @@ export function TradePanel({
             : [0.25, 0.5, 1].map((f) => (
                 <button
                   key={f}
-                  onClick={() => setInput(String(Math.floor(held * f * 100) / 100))}
+                  onClick={() => setInput(f === 1 ? held.toFixed(6) : String(Math.floor(held * f * 1e6) / 1e6))}
                   className="flex-1 rounded-md bg-subtle py-1.5 text-xs font-semibold hover:bg-line"
                 >
                   {f === 1 ? "Max" : `${f * 100}%`}
@@ -195,6 +222,7 @@ export function TradePanel({
       )}
 
       <div className="mt-5">
+        {isConnected && chainId !== marketChain.id && <p className="mb-2 text-xs text-down">Switch your wallet to Ethereum Sepolia to trade.</p>}
         {!isConnected ? (
           <button
             onClick={() => openConnectModal?.()}
@@ -202,35 +230,39 @@ export function TradePanel({
           >
             Connect wallet to trade
           </button>
-        ) : mode === "buy" && balance < 1 ? (
+        ) : !closed && !needsFunding && mode === "buy" && balance < 1 && state.canFaucet !== false ? (
           <button
             onClick={faucet}
-            disabled={pending}
+            disabled={pending || unavailable || now < (state.faucetAvailableAt ?? 0)}
             className="w-full rounded-lg bg-brand py-3 text-sm font-semibold text-white hover:bg-brand-dark disabled:opacity-60"
           >
-            {pending ? "Minting…" : "Get 1,000 test USDC"}
+            {pending ? "Minting…" : now < (state.faucetAvailableAt ?? 0) ? "Faucet available after 24 hours" : "Get 1,000 test USDC"}
           </button>
         ) : (
           <button
             onClick={submit}
-            disabled={pending || closed || value <= 0}
+            disabled={pending || closed || needsFunding || unavailable || !quote || value <= 0 || (mode === "buy" ? value > balance : value > held)}
             className={`w-full rounded-lg py-3 text-sm font-semibold text-white disabled:opacity-50 ${
               side === "yes" ? "bg-yes hover:brightness-95" : "bg-no hover:brightness-95"
             }`}
           >
-            {closed
-              ? "Market closed"
+            {needsFunding
+              ? "Awaiting creator funding"
+              : closed ? "Market closed"
               : pending
                 ? "Confirming…"
                 : `${mode === "buy" ? "Buy" : "Sell"} ${side === "yes" ? "Yes" : "No"}`}
           </button>
         )}
+        {current?.error && <p className="mt-2 text-xs text-down">{current.error}</p>}
+        {value > 0 && !current && !closed && <p className="mt-2 text-xs text-muted">Getting quote…</p>}
         {error && <p className="mt-2 text-xs text-down">{error}</p>}
         {notice && <p className="mt-2 text-xs text-yes">{notice}</p>}
       </div>
 
       <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
-        Each share pays $1 if correct. Prices set by an on-chain LMSR market maker.
+        Each winning share pays 1 USDC.
+        {" Contract quotes · 1% price tolerance · two-minute transaction deadline."}
       </p>
     </div>
   );

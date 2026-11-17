@@ -1,0 +1,25 @@
+{
+  "chainId": 11155111,
+  "creator": "0xcC2eA958d297a67de427b61FD5922eDcceA2f1FC",
+  "collateral": {
+    "address": "0x8d8d149efe7ed0a4aF65ED973589b94939335382",
+    "block": 12151305,
+    "transaction": "0xc73e541626969f2672f2d8c1df3752a6525ab1b5fd6ae3adf4cd064f44b6a324"
+  },
+  "market": {
+    "address": "0x8DeFFd1eEE4890a3f03566525196D1cD3432096F",
+    "block": 12151308,
+    "transaction": "0x5135149230412d058648cd9a569ead9c43cbf4d4524a2d62634421b1f4cf14f6",
+    "question": "Will this Sepolia market's integration test pass?",
+    "closesAt": "2026-11-17T02:03:36.000Z"
+  },
+  "additionalMarkets": [
+    {
+      "address": "0x311cA1ed4E1e2e10e0d4c0d3C38960D09e7fD7b9",
+      "block": 12151345,
+      "transaction": "0xe36e4b0a32617cacc593b7871c79457a80779da2ade7648129166a1d075f029e",
+      "question": "Sepolia UI test: will buying and selling work?",
+      "closesAt": "2026-11-18T02:05:53.000Z"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import type { Category, MarketEvent, Position, Side, Trade } from "../types";
+import type { MarketEvent, Position, Side, Trade } from "../types";
 
 export type Address = `0x${string}`;
 
@@ -11,19 +11,13 @@ export interface Quote {
   newPriceYes: number;
   /** Max payout if this side wins (buy only). */
   payout: number;
+  /** Exact six-decimal output for an on-chain minimum-output limit. */
+  rawOutput?: string;
 }
 
-export interface NewMarketInput {
-  title: string;
-  category: Category;
-  course?: string;
-  rules: string;
-  closesAt: number;
-  /** One label for a plain Yes/No market, several for a multi-outcome event. */
-  outcomes: string[];
-  initialProbability: number;
-  /** LMSR liquidity parameter. Creator posts b * ln(2) USDC per outcome. */
-  liquidity: number;
+export interface TradeLimits {
+  minOutput: string;
+  deadline: number;
 }
 
 export interface ProtocolState {
@@ -31,24 +25,25 @@ export interface ProtocolState {
   balances: Record<Address, number>;
   positions: Record<Address, Position[]>;
   trades: Trade[];
+  loading?: boolean;
+  error?: string;
+  canFaucet?: boolean;
+  faucetAvailableAt?: number;
 }
 
 /**
- * Everything the UI needs from "the chain". The current implementation
- * (`mock.ts`) keeps state in localStorage. When the Solidity contracts land,
- * add an on-chain implementation backed by viem/wagmi that satisfies the same
- * interface and swap it in `index.ts`.
+ * UI operations for the configured Market contract.
  */
 export interface Protocol {
   getState(): ProtocolState;
+  getServerState(): ProtocolState;
   subscribe(listener: () => void): () => void;
 
-  quoteBuy(eventId: string, outcomeId: string, side: Side, amount: number): Quote;
-  quoteSell(eventId: string, outcomeId: string, side: Side, shares: number): Quote;
+  quoteBuy(eventId: string, outcomeId: string, side: Side, amount: number): Promise<Quote>;
+  quoteSell(eventId: string, outcomeId: string, side: Side, shares: number): Promise<Quote>;
 
-  buy(account: Address, eventId: string, outcomeId: string, side: Side, amount: number): Promise<Trade>;
-  sell(account: Address, eventId: string, outcomeId: string, side: Side, shares: number): Promise<Trade>;
-  createMarket(account: Address, input: NewMarketInput): Promise<MarketEvent>;
+  buy(account: Address, eventId: string, outcomeId: string, side: Side, amount: number, limits?: TradeLimits): Promise<Trade>;
+  sell(account: Address, eventId: string, outcomeId: string, side: Side, shares: number, limits?: TradeLimits): Promise<Trade>;
 
   /** Testnet-only: mint mock USDC. */
   faucet(account: Address): Promise<void>;

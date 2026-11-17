@@ -6,8 +6,8 @@
  * A winning share pays out 1 USDC. The market maker's worst-case loss is
  * b * ln(2), which is the subsidy a market creator must post.
  *
- * This file is the source of truth for pricing until the Solidity contracts
- * exist; the contracts should implement the same math (fixed-point).
+ * Used for chart probabilities and estimated position values. Executable trade
+ * quotes come from the configured contract’s fixed-point pricing functions.
  */
 
 function logSumExp(a: number, b: number): number {

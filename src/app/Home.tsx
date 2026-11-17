@@ -5,19 +5,20 @@ import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { CourseTile, MarketCard, outcomePrice, totalVolume } from "@/components/MarketCard";
 import { PriceChart, SERIES_COLORS } from "@/components/PriceChart";
-import { useProtocolState } from "@/lib/protocol";
+import { useProtocolState, useNow } from "@/lib/protocol";
 import { compactUsd, date, pct } from "@/lib/format";
 import { CATEGORIES, type Category, type MarketEvent } from "@/lib/types";
 
-type Tab = "Trending" | "New" | "Closing soon" | Category;
-const TABS: Tab[] = ["Trending", "New", "Closing soon", ...CATEGORIES];
+type Tab = "Trending" | "New" | "Closing soon" | "Closed" | "Resolved" | Category;
+const TABS: Tab[] = ["Trending", "New", "Closing soon", "Closed", "Resolved", ...CATEGORIES];
 
 export function Home() {
-  const { events } = useProtocolState();
+  const { events, loading, error } = useProtocolState();
+  const now = useNow();
   const q = (useSearchParams().get("q") ?? "").trim().toLowerCase();
   const [tab, setTab] = useState<Tab>("Trending");
 
-  const all = useMemo(() => Object.values(events).filter((e) => e.status === "open"), [events]);
+  const all = useMemo(() => Object.values(events).filter((e) => tab === "Resolved" ? e.status === "resolved" : tab === "Closed" ? e.status !== "resolved" && (e.status === "closed" || now >= e.closesAt) : e.status === "open" && now < e.closesAt), [events, tab, now]);
 
   const list = useMemo(() => {
     let l = all;
@@ -75,10 +76,8 @@ export function Home() {
 
       {list.length === 0 && (
         <div className="mt-16 text-center text-muted">
-          <p>No markets here yet.</p>
-          <Link href="/create" className="mt-2 inline-block font-semibold text-brand hover:underline">
-            Create one →
-          </Link>
+          <p>{loading ? "Loading market…" : error ? "The market could not be loaded. Check the connection message above." : "No markets in this view."}</p>
+
         </div>
       )}
     </div>

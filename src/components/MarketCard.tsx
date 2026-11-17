@@ -48,7 +48,7 @@ export function totalVolume(ev: MarketEvent) {
 }
 
 export function outcomePrice(o: MarketEvent["outcomes"][number]) {
-  return priceYes(o.qYes, o.qNo, o.b);
+  return o.result ? o.result === "yes" ? 1 : 0 : priceYes(o.qYes, o.qNo, o.b);
 }
 
 function YesNo({ href }: { href: string }) {
